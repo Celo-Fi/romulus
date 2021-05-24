@@ -1,5 +1,5 @@
 {
-  "name": "tornado-governance",
+  "name": "poof-governance",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -15,12 +15,15 @@
     "prettier:fix": "prettier --write . --config .prettierrc",
     "lint": "yarn eslint && yarn prettier:check"
   },
-  "author": "Tornado.cash team <hello@tornado.cash>",
+  "author": "Poof.cash team <brian@poof.cash>",
   "license": "MIT",
   "dependencies": {
-    "@openzeppelin/contracts": "^3.2.0-rc.0",
+    "@openzeppelin/contracts": "^4.1.0",
     "@openzeppelin/upgrades-core": "^1.0.1",
-    "torn-token": "^1.0.0"
+    "@poofcash/poof-token": "^1.0.3",
+    "bip39": "^3.0.4",
+    "solparse": "^2.2.8",
+    "web3-utils": "^1.3.6"
   },
   "devDependencies": {
     "@openzeppelin/truffle-upgrades": "^1.0.2",
@@ -32,8 +35,9 @@
     "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",
     "eslint": "^7.8.1",
-    "prettier": "^2.1.1",
-    "prettier-plugin-solidity": "^1.0.0-alpha.57",
+    "ethereumjs-wallet": "^1.0.1",
+    "prettier": "^2.3.0",
+    "prettier-plugin-solidity": "^1.0.0-beta.10",
     "solhint-plugin-prettier": "^0.0.5",
     "solidity-coverage": "^0.7.10",
     "truffle": "^5.1.43",
