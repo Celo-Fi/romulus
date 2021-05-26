@@ -48,9 +48,9 @@ contract("RomulusDelegate", (accounts) => {
     unlockedVoter = await getUnlockedAccount()
 
     token = await Poof.new(root)
-    const govDelegateAddress = await getNextAddr(root, 1);
-    const timelock = await Timelock.new(govDelegateAddress, 0)
-    govDelegate = await RomulusDelegate.new(timelock.address, token.address, 5760, 1, toWei("100000"));
+    govDelegate = await RomulusDelegate.new(token.address, 5760, 1, toWei("1000000"));
+    const timelock = await Timelock.new(govDelegate.address, 0)
+    await govDelegate.initialize(timelock.address)
 
     targets = [a1];
     values = ["0"];
@@ -94,7 +94,7 @@ contract("RomulusDelegate", (accounts) => {
 
   describe("#propose", () => {
     it("should revert if the proposer does not have enough tokens", async () => {
-      await enfranchise(token, proposer, toWei("100000"));
+      await enfranchise(token, proposer, toWei("1000000"));
       await govDelegate.propose(targets, values, signatures, calldatas, "do nothing", {from: proposer}).should.be.rejectedWith("Romulus::propose: proposer votes below proposal threshold")
     })
 
@@ -206,7 +206,6 @@ contract("RomulusDelegate", (accounts) => {
   describe("#state", () => {
     it("should revert for a non-existent proposal", async () => {
       const proposalId = await govDelegate.latestProposalIds(proposer)
-      console.log(proposalId.toString(), (await govDelegate.proposalCount()).toString())
       await govDelegate.state(proposalId.add(toBN(1))).should.be.rejectedWith("Romulus::state: invalid proposal id")
     })
 
@@ -234,7 +233,7 @@ contract("RomulusDelegate", (accounts) => {
 
     it("should show defeated", async () => {
       const proposalId = await createProposal()
-      await advanceBlocks(6000) // TODO: Use time rather than blocks
+      await advanceBlocks(6000)
       const state = await govDelegate.state(proposalId)
       state.should.be.eq.BN("3")
       await cancelProposal(proposalId)
@@ -246,7 +245,7 @@ contract("RomulusDelegate", (accounts) => {
       await mineBlock();
 
       await govDelegate.castVote(proposalId, 1, {from: voter4})
-      await advanceBlocks(6000) // TODO: Use time rather than blocks
+      await advanceBlocks(6000) 
       const state = await govDelegate.state(proposalId)
       state.should.be.eq.BN("4")
     })
