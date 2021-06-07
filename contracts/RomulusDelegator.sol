@@ -3,14 +3,15 @@
 pragma solidity ^0.8.0;
 pragma experimental ABIEncoderV2;
 
+import "@poofcash/poof-token/contracts/NomResolve.sol";
 import "./RomulusInterfaces.sol";
 
-contract RomulusDelegator is RomulusDelegatorStorage, RomulusEvents {
+contract RomulusDelegator is RomulusDelegatorStorage, RomulusEvents, NomResolve {
   constructor(
-    address timelock_,
-	  address token_,
-	  address admin_,
-    address implementation_,
+    bytes32 timelock_,
+	  bytes32 token_,
+	  bytes32 admin_,
+    bytes32 implementation_,
     uint votingPeriod_,
     uint votingDelay_,
     uint proposalThreshold_
@@ -19,18 +20,18 @@ contract RomulusDelegator is RomulusDelegatorStorage, RomulusEvents {
     admin = msg.sender;
 
     delegateTo(
-      implementation_, 
+      resolve(implementation_), 
       abi.encodeWithSignature(
         "initialize(address,address,uint256,uint256,uint256)",
-         timelock_,
-         token_,
+         resolve(timelock_),
+         resolve(token_),
          votingPeriod_,
          votingDelay_,
          proposalThreshold_
       )
     );
-    _setImplementation(implementation_);
-    admin = admin_;
+    _setImplementation(resolve(implementation_));
+    admin = resolve(admin_);
 	}
 
 

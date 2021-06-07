@@ -11,7 +11,7 @@ const {toBN, toWei} = require('web3-utils')
 
 const Poof = artifacts.require('POOFMock')
 const Timelock = artifacts.require('TimelockMock')
-const RomulusDelegator = artifacts.require('RomulusDelegator')
+const RomulusDelegator = artifacts.require('RomulusDelegatorMock')
 const RomulusDelegate = artifacts.require('RomulusDelegate')
 
 async function enfranchise(token, actor, amount) {
