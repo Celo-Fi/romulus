@@ -2,7 +2,6 @@ require('chai').use(require('bn-chai')(web3.utils.BN)).use(require('chai-as-prom
 const {
   encodeParameters,
   mineBlock,
-  getUnlockedAccount,
   advanceBlocks,
 } = require('./utils/Ethereum');
 const EIP712 = require('./utils/EIP712');
@@ -46,7 +45,6 @@ contract("RomulusDelegator", (accounts) => {
 
   before(async () => {
     [root, a1, proposer, voter1, voter2, voter3, voter4, ...otherAccounts] = accounts;
-    unlockedVoter = await getUnlockedAccount()
 
     const delegatorExpectedAddr = await getNextAddr(root, 3)
 
@@ -69,6 +67,15 @@ contract("RomulusDelegator", (accounts) => {
     values = ["0"];
     signatures = ["getBalanceOf(address)"];
     calldatas = [encodeParameters(['address'], [a1])];
+
+    // Set up an unlocked account
+    unlockedVoter = web3.eth.accounts.create()
+    web3.eth.accounts.wallet.add(unlockedVoter.privateKey)
+    await web3.eth.sendTransaction({
+      from: root,
+      to: unlockedVoter.address,
+      value: toWei("1")
+    })
   });
 
   describe("#enfranchise", () => {
@@ -258,7 +265,7 @@ contract("RomulusDelegator", (accounts) => {
       await mineBlock();
 
       await govDelegator.castVote(proposalId, 1, {from: voter4})
-      await advanceBlocks(6000) 
+      await advanceBlocks(6000)
       const state = await govDelegator.state(proposalId)
       state.should.be.eq.BN("4")
     })
@@ -302,36 +309,36 @@ contract("RomulusDelegator", (accounts) => {
       await cancelProposal(proposalId)
     });
 
-    // TODO: Re-enable. Need an account with both ETH and private key
-    // it('casts vote on behalf of the signatory', async () => {
-    //   const Domain = {
-    //     name: 'Romulus',
-    //     chainId: 1, // await web3.eth.net.getId(); See: https://github.com/trufflesuite/ganache-core/issues/515
-    //     verifyingContract: govDelegator.address
-    //   };
-    //   const Types = {
-    //     Ballot: [
-    //       {name: 'proposalId', type: 'uint256'},
-    //       {name: 'support', type: 'uint8'},
-    //     ]
-    //   };
+    it('casts vote on behalf of the signatory', async () => {
+      const Domain = {
+        name: 'Romulus',
+        chainId: 1, // await web3.eth.net.getId(); See: https://github.com/trufflesuite/ganache-core/issues/515
+        verifyingContract: govDelegator.address
+      };
+      const Types = {
+        Ballot: [
+          {name: 'proposalId', type: 'uint256'},
+          {name: 'support', type: 'uint8'},
+        ]
+      };
 
-    //   await enfranchise(token, unlockedVoter.address, 1);
+      await token.transfer(unlockedVoter.address, 1)
+      const tokenContract = new web3.eth.Contract(Poof.abi, token.address)
+      await tokenContract.methods.delegate(unlockedVoter.address).send({from: unlockedVoter.address, gas: 2e5})
 
-    //   const proposalId = await createProposal()
-    //   await mineBlock();
+      const proposalId = await createProposal()
+      await mineBlock();
 
-    //   // const tx = new web3.eth.Contract(RomulusDelegate.abi, govDelegator.address).methods
-    //   const {v, r, s} = EIP712.sign(Domain, 'Ballot', {proposalId, support: 1}, Types, unlockedVoter.privateKey);
+      // const tx = new web3.eth.Contract(RomulusDelegate.abi, govDelegator.address).methods
+      const {v, r, s} = EIP712.sign(Domain, 'Ballot', {proposalId, support: 1}, Types, unlockedVoter.privateKey);
 
-    //   let beforeFors = (await govDelegator.proposals(proposalId)).forVotes;
-    //   const tx = await govDelegator.castVoteBySig(proposalId, 1, v, r, s, {from: root});
-    //   expect(tx.gasUsed < 80000);
+      let beforeFors = (await govDelegator.proposals(proposalId)).forVotes;
+      await govDelegator.castVoteBySig(proposalId, 1, v, r, s, {from: root});
 
-    //   let afterFors = (await gov.proposals(proposalId)).forVotes;
-    //   afterFors.sub(beforeFors).should.be.eq.BN(toWei("7"))
+      let afterFors = (await govDelegator.proposals(proposalId)).forVotes;
+      afterFors.sub(beforeFors).should.be.eq.BN("1")
 
-    //   await cancelProposal(proposalId)
-    // });
+      await cancelProposal(proposalId)
+    });
   });
 });

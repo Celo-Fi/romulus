@@ -38,7 +38,6 @@ function encodeType(primaryType, types = {}) {
 }
 
 function typeHash(primaryType, types = {}) {
-  console.log(encodeType(primaryType, types))
   return ethUtil.keccak256(encodeType(primaryType, types));
 }
 
@@ -90,8 +89,6 @@ function structHash(primaryType, data, types = {}) {
 }
 
 function digestToSign(domain, primaryType, message, types = {}) {
-  console.log('sep', domainSeparator(domain))
-  console.log('shash', structHash(primaryType, message, types))
   return ethUtil.keccak256(
     Buffer.concat([
       Buffer.from('1901', 'hex'),
@@ -109,7 +106,7 @@ function sign(domain, primaryType, message, types = {}, privateKey) {
     message,
     types,
     digest,
-    // ...ethUtil.ecsign(digest, ethUtil.toBuffer(privateKey))
+    ...ethUtil.ecsign(digest, ethUtil.toBuffer(privateKey))
   };
 }
 

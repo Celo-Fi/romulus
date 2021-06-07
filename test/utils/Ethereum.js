@@ -2,8 +2,6 @@
 
 const BigNumber = require('bignumber.js');
 const ethers = require('ethers');
-const bip39 = require('bip39');
-const {hdkey} = require('ethereumjs-wallet');
 
 
 function UInt256Max() {
@@ -123,17 +121,6 @@ async function sendFallback(contract, opts = {}) {
   return Object.assign(receipt, {events: receipt.logs});
 }
 
-async function getUnlockedAccount(index = 0) {
-  const mnemonic = 'foot negative cheap drum gate system banner region transfer autumn atom praise home must bird offer vague april deer raven lift resource crawl wisdom'
-  const seed = await bip39.mnemonicToSeed(mnemonic); // mnemonic is the string containing the words
-  const hdk = hdkey.fromMasterSeed(seed);
-  const addressNode = hdk.derivePath(`m/44'/60'/0'/0/${index}`);
-  const address = addressNode.getWallet().getAddressString(); //check that this is the same with the address that ganache list for the first account to make sure the derivation is correct
-  const privateKey = web3.utils.toHex(addressNode.getWallet().getPrivateKey());
-  web3.eth.accounts.wallet.add(privateKey)
-  return {address, privateKey}
-}
-
 async function takeSnapshot() {
   return rpc({method: 'evm_snapshot'});
 }
@@ -153,7 +140,6 @@ module.exports = {
   etherUnsigned,
   mergeInterface,
   keccak256,
-  getUnlockedAccount,
 
   advanceBlocks,
   blockNumber,
