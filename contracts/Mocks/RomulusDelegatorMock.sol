@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.0;
 
 import "@nomspace/nomspace/contracts/interfaces/INom.sol";
