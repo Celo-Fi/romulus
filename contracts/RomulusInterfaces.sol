@@ -85,11 +85,14 @@ contract RomulusDelegateStorageV1 is RomulusDelegatorStorage {
   /// @notice The total number of proposals
   uint256 public proposalCount;
 
-  /// @notice The address of the Compound Protocol Timelock
+  /// @notice The address of the Governance Timelock
   TimelockInterface public timelock;
 
-  /// @notice The address of the Compound governance token
+  /// @notice The address of the governance token
   IHasVotes public token;
+
+  /// @notice The address of the "Release" governance token
+  IHasVotes public releaseToken;
 
   /// @notice The official record of all proposals ever proposed
   mapping(uint256 => Proposal) public proposals;

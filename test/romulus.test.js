@@ -6,7 +6,7 @@ const {
 } = require('./utils/Ethereum');
 const EIP712 = require('./utils/EIP712');
 const RLP = require('rlp')
-const {toBN, toWei} = require('web3-utils')
+const {toBN, toWei, toHex} = require('web3-utils');
 
 const Poof = artifacts.require('POOFMock')
 const Timelock = artifacts.require('TimelockMock')
@@ -54,6 +54,7 @@ contract("RomulusDelegator", (accounts) => {
     govDelegator = await RomulusDelegator.new(
       timelock.address,
       token.address,
+      toHex(0),
       timelock.address,
       govDelegate.address,
       5760,

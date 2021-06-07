@@ -49,7 +49,8 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
   /**
    * @notice Used to initialize the contract during delegator contructor
    * @param timelock_ The address of the Timelock
-   * @param token_ The address of the COMP token
+   * @param token_ The address of the voting token
+   * @param releaseToken_ The address of the "Release" voting token. If none, specify the zero address.
    * @param votingPeriod_ The initial voting period
    * @param votingDelay_ The initial voting delay
    * @param proposalThreshold_ The initial proposal threshold
@@ -57,6 +58,7 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
   function initialize(
     address timelock_,
     address token_,
+    address releaseToken_,
     uint256 votingPeriod_,
     uint256 votingDelay_,
     uint256 proposalThreshold_
@@ -74,6 +76,7 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
 
     timelock = TimelockInterface(timelock_);
     token = IHasVotes(token_);
+    releaseToken = IHasVotes(releaseToken_);
     votingPeriod = votingPeriod_;
     votingDelay = votingDelay_;
     proposalThreshold = proposalThreshold_;
@@ -96,7 +99,7 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
     string memory description
   ) public returns (uint256) {
     require(
-      token.getPriorVotes(msg.sender, sub256(block.number, 1)) > proposalThreshold,
+      getPriorVotes(msg.sender, sub256(block.number, 1)) > proposalThreshold,
       "Romulus::propose: proposer votes below proposal threshold"
     );
     require(
@@ -216,7 +219,7 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
 
     Proposal storage proposal = proposals[proposalId];
     require(
-      msg.sender == proposal.proposer || token.getPriorVotes(proposal.proposer, sub256(block.number, 1)) < proposalThreshold,
+      msg.sender == proposal.proposer || getPriorVotes(proposal.proposer, sub256(block.number, 1)) < proposalThreshold,
       "Romulus::cancel: proposer above threshold"
     );
 
@@ -357,7 +360,7 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
     Proposal storage proposal = proposals[proposalId];
     Receipt storage receipt = proposalReceipts[proposalId][voter];
     require(receipt.hasVoted == false, "Romulus::castVoteInternal: voter already voted");
-    uint96 votes = token.getPriorVotes(voter, proposal.startBlock);
+    uint96 votes = getPriorVotes(voter, proposal.startBlock);
 
     if (support == 0) {
       proposal.againstVotes = add256(proposal.againstVotes, votes);
@@ -475,5 +478,18 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
       chainId := chainid()
     }
     return chainId;
+  }
+
+  function getPriorVotes(address voter, uint256 beforeBlock) internal view returns (uint96) {
+    if (address(releaseToken) == address(0)) {
+      return token.getPriorVotes(voter, beforeBlock);
+    }
+    return add96(token.getPriorVotes(voter, beforeBlock), releaseToken.getPriorVotes(voter, beforeBlock), "getPriorVotes overflow");
+  }
+
+  function add96(uint96 a, uint96 b, string memory errorMessage) internal pure returns (uint96) {
+    uint96 c = a + b;
+    require(c >= a, errorMessage);
+    return c;
   }
 }
