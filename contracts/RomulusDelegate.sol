@@ -3,10 +3,11 @@
 pragma solidity ^0.8.0;
 pragma experimental ABIEncoderV2;
 
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@ubeswap/governance/contracts/interfaces/IHasVotes.sol";
 import "./RomulusInterfaces.sol";
 
-contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents {
+contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializable {
   /// @notice The name of this contract
   string public constant name = "Romulus";
 
@@ -47,41 +48,35 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents {
 
   /**
    * @notice Used to initialize the contract during delegator contructor
+   * @param timelock_ The address of the Timelock
    * @param token_ The address of the COMP token
    * @param votingPeriod_ The initial voting period
    * @param votingDelay_ The initial voting delay
    * @param proposalThreshold_ The initial proposal threshold
    */
-  constructor(
+  function initialize(
+    address timelock_,
     address token_,
     uint256 votingPeriod_,
     uint256 votingDelay_,
     uint256 proposalThreshold_
-  ) {
+  ) public initializer adminOnly {
+    require(TimelockInterface(timelock_).admin() == address(this), "Romulus::initialize: timelock admin is not assigned to RomulusDelegate");
     require(
       votingPeriod_ >= MIN_VOTING_PERIOD && votingPeriod_ <= MAX_VOTING_PERIOD,
-      "Romulus::constructor: invalid voting period"
+      "Romulus::initialize: invalid voting period"
     );
-    require(votingDelay_ >= MIN_VOTING_DELAY && votingDelay_ <= MAX_VOTING_DELAY, "Romulus::constructor: invalid voting delay");
+    require(votingDelay_ >= MIN_VOTING_DELAY && votingDelay_ <= MAX_VOTING_DELAY, "Romulus::initialize: invalid voting delay");
     require(
       proposalThreshold_ >= MIN_PROPOSAL_THRESHOLD && proposalThreshold_ <= MAX_PROPOSAL_THRESHOLD,
-      "Romulus::constructor: invalid proposal threshold"
+      "Romulus::initialize: invalid proposal threshold"
     );
 
-    admin = msg.sender;
+    timelock = TimelockInterface(timelock_);
     token = IHasVotes(token_);
     votingPeriod = votingPeriod_;
     votingDelay = votingDelay_;
     proposalThreshold = proposalThreshold_;
-  }
-
-  /**
-   * @param timelock_ The address of the Timelock
-   */
-  function initialize(address timelock_) public {
-    require(address(timelock) == address(0), "RomulusDelegate has already been initialized");
-    require(TimelockInterface(timelock_).admin() == address(this), "Romulus::constructor: timelock admin is not assigned to RomulusDelegate");
-    timelock = TimelockInterface(timelock_);
   }
 
   /**

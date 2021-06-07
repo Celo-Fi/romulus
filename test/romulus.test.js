@@ -11,6 +11,7 @@ const {toBN, toWei} = require('web3-utils')
 
 const Poof = artifacts.require('POOFMock')
 const Timelock = artifacts.require('TimelockMock')
+const RomulusDelegator = artifacts.require('RomulusDelegator')
 const RomulusDelegate = artifacts.require('RomulusDelegate')
 
 async function enfranchise(token, actor, amount) {
@@ -29,28 +30,40 @@ async function getNextAddr(sender, offset = 0) {
   )
 }
 
-contract("RomulusDelegate", (accounts) => {
-  let token, root, a1, otherAccounts, proposer, voter1, voter2, voter3, voter4, govDelegate, unlockedVoter;
+contract("RomulusDelegator", (accounts) => {
+  let token, root, a1, otherAccounts, proposer, voter1, voter2, voter3, voter4, govDelegator, unlockedVoter;
   let targets, values, signatures, calldatas;
 
   const createProposal = async () => {
-    await govDelegate.propose(targets, values, signatures, calldatas, "do nothing", {from: proposer});
-    const proposalId = await govDelegate.latestProposalIds(proposer)
+    await govDelegator.propose(targets, values, signatures, calldatas, "do nothing", {from: proposer});
+    const proposalId = await govDelegator.latestProposalIds(proposer)
     return proposalId;
   }
 
   const cancelProposal = async (proposalId) => {
-    await govDelegate.cancel(proposalId, {from: proposer});
+    await govDelegator.cancel(proposalId, {from: proposer});
   }
 
   before(async () => {
     [root, a1, proposer, voter1, voter2, voter3, voter4, ...otherAccounts] = accounts;
     unlockedVoter = await getUnlockedAccount()
 
-    token = await Poof.new(root)
-    govDelegate = await RomulusDelegate.new(token.address, 5760, 1, toWei("1000000"));
-    const timelock = await Timelock.new(govDelegate.address, 0)
-    await govDelegate.initialize(timelock.address)
+    const delegatorExpectedAddr = await getNextAddr(root, 3)
+
+    token = await Poof.new([{to: root, amount: toWei("100000000")}])
+    const timelock = await Timelock.new(delegatorExpectedAddr, 0)
+    const govDelegate = await RomulusDelegate.new();
+    govDelegator = await RomulusDelegator.new(
+      timelock.address,
+      token.address,
+      timelock.address,
+      govDelegate.address,
+      5760,
+      1,
+      toWei("1000000"),
+    );
+    // Inherit ABI of RomulusDelegate, but call through the proxy (i.e. the delegator)
+    govDelegator = await RomulusDelegate.at(govDelegator.address)
 
     targets = [a1];
     values = ["0"];
@@ -95,7 +108,7 @@ contract("RomulusDelegate", (accounts) => {
   describe("#propose", () => {
     it("should revert if the proposer does not have enough tokens", async () => {
       await enfranchise(token, proposer, toWei("1000000"));
-      await govDelegate.propose(targets, values, signatures, calldatas, "do nothing", {from: proposer}).should.be.rejectedWith("Romulus::propose: proposer votes below proposal threshold")
+      await govDelegator.propose(targets, values, signatures, calldatas, "do nothing", {from: proposer}).should.be.rejectedWith("Romulus::propose: proposer votes below proposal threshold")
     })
 
     it("should work if the proposer has enough tokens", async () => {
@@ -128,7 +141,7 @@ contract("RomulusDelegate", (accounts) => {
   describe('#getActions', () => {
     it('should work', async () => {
       const proposalId = await createProposal()
-      const actions = await govDelegate.getActions(proposalId);
+      const actions = await govDelegator.getActions(proposalId);
       assert.deepEqual(targets, actions.targets)
       assert.deepEqual(values, actions.values.map((bn) => bn.toString()))
       assert.deepEqual(signatures, actions.signatures)
@@ -140,43 +153,43 @@ contract("RomulusDelegate", (accounts) => {
   describe("#voting", () => {
     it("should revert if the proposal does not exist", async () => {
       let proposalId = await createProposal(proposer)
-      await govDelegate.castVote(proposalId.add(toBN(1)), 1, {from: voter1}).should.be.rejectedWith("Romulus::state: invalid proposal id")
+      await govDelegator.castVote(proposalId.add(toBN(1)), 1, {from: voter1}).should.be.rejectedWith("Romulus::state: invalid proposal id")
       await cancelProposal(proposalId)
     });
 
     it("should revert if the proposal is pending", async () => {
       let proposalId = await createProposal(proposer)
 
-      await govDelegate.castVote(proposalId, 1, {from: voter1}).should.be.rejectedWith("Romulus::castVoteInternal: voting is closed")
+      await govDelegator.castVote(proposalId, 1, {from: voter1}).should.be.rejectedWith("Romulus::castVoteInternal: voting is closed")
     });
 
     it("should work", async () => {
-      const proposalId = await govDelegate.latestProposalIds(proposer);
+      const proposalId = await govDelegator.latestProposalIds(proposer);
       await mineBlock()
-      await govDelegate.castVote(proposalId, 1, {from: voter1})
+      await govDelegator.castVote(proposalId, 1, {from: voter1})
     })
 
     it("should revert if proposal already has an entry in its voter set", async () => {
-      const proposalId = await govDelegate.latestProposalIds(proposer);
-      await govDelegate.castVote(proposalId, 1, {from: voter1}).should.be.rejectedWith("revert Romulus::castVoteInternal: voter already voted")
+      const proposalId = await govDelegator.latestProposalIds(proposer);
+      await govDelegator.castVote(proposalId, 1, {from: voter1}).should.be.rejectedWith("revert Romulus::castVoteInternal: voter already voted")
       await cancelProposal(proposalId)
     });
 
     it("should add for votes correctly", async () => {
       const proposalId = await createProposal();
-      let proposal = await govDelegate.proposals(proposalId);
+      let proposal = await govDelegator.proposals(proposalId);
       proposal.forVotes.should.be.eq.BN("0")
 
       await mineBlock();
 
       // voter2 votes
-      await govDelegate.castVote(proposalId, 1, {from: voter2});
-      proposal = await govDelegate.proposals(proposalId);
+      await govDelegator.castVote(proposalId, 1, {from: voter2});
+      proposal = await govDelegator.proposals(proposalId);
       proposal.forVotes.should.be.eq.BN(toWei("7"))
 
       // voter3 votes
-      await govDelegate.castVote(proposalId, 1, {from: voter3});
-      proposal = await govDelegate.proposals(proposalId);
+      await govDelegator.castVote(proposalId, 1, {from: voter3});
+      proposal = await govDelegator.proposals(proposalId);
       proposal.forVotes.should.be.eq.BN(toWei("13"))
 
       cancelProposal(proposalId)
@@ -184,19 +197,19 @@ contract("RomulusDelegate", (accounts) => {
 
     it("should add against votes correctly", async () => {
       const proposalId = await createProposal();
-      let proposal = await govDelegate.proposals(proposalId);
+      let proposal = await govDelegator.proposals(proposalId);
       proposal.againstVotes.should.be.eq.BN("0")
 
       await mineBlock();
 
       // voter2 votes
-      await govDelegate.castVote(proposalId, 0, {from: voter2});
-      proposal = await govDelegate.proposals(proposalId);
+      await govDelegator.castVote(proposalId, 0, {from: voter2});
+      proposal = await govDelegator.proposals(proposalId);
       proposal.againstVotes.should.be.eq.BN(toWei("7"))
 
       // voter3 votes
-      await govDelegate.castVote(proposalId, 0, {from: voter3});
-      proposal = await govDelegate.proposals(proposalId);
+      await govDelegator.castVote(proposalId, 0, {from: voter3});
+      proposal = await govDelegator.proposals(proposalId);
       proposal.againstVotes.should.be.eq.BN(toWei("13"))
 
       cancelProposal(proposalId)
@@ -205,13 +218,13 @@ contract("RomulusDelegate", (accounts) => {
 
   describe("#state", () => {
     it("should revert for a non-existent proposal", async () => {
-      const proposalId = await govDelegate.latestProposalIds(proposer)
-      await govDelegate.state(proposalId.add(toBN(1))).should.be.rejectedWith("Romulus::state: invalid proposal id")
+      const proposalId = await govDelegator.latestProposalIds(proposer)
+      await govDelegator.state(proposalId.add(toBN(1))).should.be.rejectedWith("Romulus::state: invalid proposal id")
     })
 
     it("should initialize to pending", async () => {
       const proposalId = await createProposal()
-      const state = await govDelegate.state(proposalId)
+      const state = await govDelegator.state(proposalId)
       state.should.be.eq.BN("0")
     })
 
@@ -219,22 +232,22 @@ contract("RomulusDelegate", (accounts) => {
       await mineBlock();
       await mineBlock();
 
-      const proposalId = await govDelegate.latestProposalIds(proposer)
-      const state = await govDelegate.state(proposalId)
+      const proposalId = await govDelegator.latestProposalIds(proposer)
+      const state = await govDelegator.state(proposalId)
       state.should.be.eq.BN("1")
     })
 
     it("should show canceled", async () => {
-      const proposalId = await govDelegate.latestProposalIds(proposer)
+      const proposalId = await govDelegator.latestProposalIds(proposer)
       await cancelProposal(proposalId)
-      const state = await govDelegate.state(proposalId)
+      const state = await govDelegator.state(proposalId)
       state.should.be.eq.BN("2")
     })
 
     it("should show defeated", async () => {
       const proposalId = await createProposal()
       await advanceBlocks(6000)
-      const state = await govDelegate.state(proposalId)
+      const state = await govDelegator.state(proposalId)
       state.should.be.eq.BN("3")
       await cancelProposal(proposalId)
     })
@@ -244,23 +257,23 @@ contract("RomulusDelegate", (accounts) => {
       await mineBlock();
       await mineBlock();
 
-      await govDelegate.castVote(proposalId, 1, {from: voter4})
+      await govDelegator.castVote(proposalId, 1, {from: voter4})
       await advanceBlocks(6000) 
-      const state = await govDelegate.state(proposalId)
+      const state = await govDelegator.state(proposalId)
       state.should.be.eq.BN("4")
     })
 
     it("should show queued", async () => {
-      const proposalId = await govDelegate.latestProposalIds(proposer)
-      await govDelegate.queue(proposalId)
-      const state = await govDelegate.state(proposalId)
+      const proposalId = await govDelegator.latestProposalIds(proposer)
+      await govDelegator.queue(proposalId)
+      const state = await govDelegator.state(proposalId)
       state.should.be.eq.BN("5")
     })
 
     it("should show executed", async () => {
-      const proposalId = await govDelegate.latestProposalIds(proposer)
-      await govDelegate.execute(proposalId)
-      const state = await govDelegate.state(proposalId)
+      const proposalId = await govDelegator.latestProposalIds(proposer)
+      await govDelegator.execute(proposalId)
+      const state = await govDelegator.state(proposalId)
       state.should.be.eq.BN("7")
     })
   })
@@ -271,10 +284,10 @@ contract("RomulusDelegate", (accounts) => {
       const proposalId = await createProposal();
       await mineBlock();
 
-      const receiptBefore = await govDelegate.getReceipt(proposalId, voter2)
+      const receiptBefore = await govDelegator.getReceipt(proposalId, voter2)
       expect(receiptBefore.hasVoted).to.equal(false)
-      await govDelegate.castVote(proposalId, 1, {from: voter2});
-      const receiptAfter = await govDelegate.getReceipt(proposalId, voter2)
+      await govDelegator.castVote(proposalId, 1, {from: voter2});
+      const receiptAfter = await govDelegator.getReceipt(proposalId, voter2)
       expect(receiptAfter.hasVoted).to.equal(true)
 
       cancelProposal(proposalId)
@@ -285,7 +298,7 @@ contract("RomulusDelegate", (accounts) => {
     it('reverts if the signatory is invalid', async () => {
       const proposalId = await createProposal()
       await mineBlock();
-      await govDelegate.castVoteBySig(proposalId, 0, 0, '0xbad', '0xbad', {from: voter2}).should.be.rejectedWith("Romulus::castVoteBySig: invalid signature");
+      await govDelegator.castVoteBySig(proposalId, 0, 0, '0xbad', '0xbad', {from: voter2}).should.be.rejectedWith("Romulus::castVoteBySig: invalid signature");
       await cancelProposal(proposalId)
     });
 
@@ -294,7 +307,7 @@ contract("RomulusDelegate", (accounts) => {
     //   const Domain = {
     //     name: 'Romulus',
     //     chainId: 1, // await web3.eth.net.getId(); See: https://github.com/trufflesuite/ganache-core/issues/515
-    //     verifyingContract: govDelegate.address
+    //     verifyingContract: govDelegator.address
     //   };
     //   const Types = {
     //     Ballot: [
@@ -308,11 +321,11 @@ contract("RomulusDelegate", (accounts) => {
     //   const proposalId = await createProposal()
     //   await mineBlock();
 
-    //   // const tx = new web3.eth.Contract(RomulusDelegate.abi, govDelegate.address).methods
+    //   // const tx = new web3.eth.Contract(RomulusDelegate.abi, govDelegator.address).methods
     //   const {v, r, s} = EIP712.sign(Domain, 'Ballot', {proposalId, support: 1}, Types, unlockedVoter.privateKey);
 
-    //   let beforeFors = (await govDelegate.proposals(proposalId)).forVotes;
-    //   const tx = await govDelegate.castVoteBySig(proposalId, 1, v, r, s, {from: root});
+    //   let beforeFors = (await govDelegator.proposals(proposalId)).forVotes;
+    //   const tx = await govDelegator.castVoteBySig(proposalId, 1, v, r, s, {from: root});
     //   expect(tx.gasUsed < 80000);
 
     //   let afterFors = (await gov.proposals(proposalId)).forVotes;
