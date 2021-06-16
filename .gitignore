@@ -97,3 +97,6 @@ typings/
 ERC20Tornado_flat.sol
 ETHTornado_flat.sol
 .env
+
+dist
+types
