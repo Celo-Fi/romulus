@@ -1,6 +1,5 @@
 import {Address, ContractKit} from "@celo/contractkit"
 import {toTransactionObject} from "@celo/connect"
-
 import {RomulusDelegate, ABI as romulusDelegateAbi} from "../types/web3-v1-contracts/RomulusDelegate"
 import {VotingToken, ABI as votingTokenAbi} from "../types/web3-v1-contracts/VotingToken"
 import {toBN} from "web3-utils"
@@ -216,7 +215,7 @@ export class RomulusKit {
       if (end < numProposals - 1) {
         nextCursor = end + 1
       }
-      for (let i = start; i <= end; i++) {
+      for (let i = start; i < end; i++) {
         proposalIds.push(i)
       }
     } else {
@@ -225,7 +224,7 @@ export class RomulusKit {
       if (end > 0) {
         nextCursor = end - 1
       }
-      for (let i = start; i >= end; i++) {
+      for (let i = start; i >= end; i--) {
         proposalIds.push(i)
       }
     }
