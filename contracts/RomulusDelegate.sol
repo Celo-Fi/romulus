@@ -109,17 +109,15 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
     require(targets.length <= proposalMaxOperations, "Romulus::propose: too many actions");
 
     uint256 latestProposalId = latestProposalIds[msg.sender];
-    if (latestProposalId != 0) {
-      ProposalState proposersLatestProposalState = state(latestProposalId);
-      require(
-        proposersLatestProposalState != ProposalState.Active,
-        "Romulus::propose: one live proposal per proposer, found an already active proposal"
-      );
-      require(
-        proposersLatestProposalState != ProposalState.Pending,
-        "Romulus::propose: one live proposal per proposer, found an already pending proposal"
-      );
-    }
+    ProposalState proposersLatestProposalState = state(latestProposalId);
+    require(
+      proposersLatestProposalState != ProposalState.Active,
+      "Romulus::propose: one live proposal per proposer, found an already active proposal"
+    );
+    require(
+      proposersLatestProposalState != ProposalState.Pending,
+      "Romulus::propose: one live proposal per proposer, found an already pending proposal"
+    );
 
     uint256 startBlock = add256(block.number, votingDelay);
     uint256 endBlock = add256(startBlock, votingPeriod);
