@@ -81,6 +81,9 @@ contract RomulusDelegateStorageV1 is RomulusDelegatorStorage {
   /// @notice The number of votes required in order for a voter to become a proposer
   uint256 public proposalThreshold;
 
+  /// @notice The number of votes in support of a proposal required in order for a quorum to be reached and for a vote to succeed
+  uint256 public quorumVotes;
+
   /// @notice The total number of proposals
   uint256 public proposalCount;
 
