@@ -1,6 +1,6 @@
 import ethers from 'ethers';
 import Web3 from 'web3';
-import {HttpProvider} from 'web3/node_modules/web3-core';
+import {HttpProvider} from 'web3-core';
 
 declare var web3: Web3
 

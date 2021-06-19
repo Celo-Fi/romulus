@@ -4,23 +4,47 @@ import {RomulusDelegate, ABI as romulusDelegateAbi} from "../types/web3-v1-contr
 import {VotingToken, ABI as votingTokenAbi} from "../types/web3-v1-contracts/VotingToken"
 import {toBN} from "web3-utils"
 
-export type Proposal = {
+type ProposalEvent = {
   id: string;
   proposer: string;
-  eta: string;
+  targets: string[];
+  values: string[];
+  signatures: string[]
+  calldatas: string[]
   startBlock: string;
   endBlock: string;
+  description: string;
+}
+type ProposalStruct = {
+  eta: string;
   forVotes: string;
   againstVotes: string;
   abstainVotes: string;
   canceled: boolean;
   executed: boolean;
 }
+type ProposalReceipt = {
+  hasVoted: boolean
+  support: string
+  votes: string
+}
+export type Proposal = ProposalEvent & ProposalStruct & ProposalReceipt
 
 export enum Support {
   AGAINST = 0,
   FOR = 1,
   ABSTAIN = 2
+}
+
+export enum ProposalState {
+  PENDING = 0,
+  ACTIVE,
+  CANCELED,
+  DEFEATED,
+  SUCCEEDED,
+  QUEUED,
+  EXPIRED,
+  EXECUTED,
 }
 
 export enum Sort {
@@ -38,7 +62,7 @@ export class RomulusKit {
 
   constructor(
     private kit: ContractKit,
-    public readonly contractAddress: Address) {
+    public readonly contractAddress?: Address) {
     this.contract =
       new kit.web3.eth.Contract(romulusDelegateAbi, contractAddress) as unknown as RomulusDelegate
   }
@@ -123,7 +147,7 @@ export class RomulusKit {
   }
 
   public state = async (proposalId: number | string) => {
-    return await this.contract.methods.state(proposalId).call()
+    return Number(await this.contract.methods.state(proposalId).call()) as ProposalState
   }
 
   // Gets the receipt for a voter on a given proposal
@@ -148,6 +172,11 @@ export class RomulusKit {
     }
   }
 
+  public hasReleaseToken = async () => {
+    const {releaseToken} = await this.getTokens()
+    return releaseToken != null
+  }
+
   public tokenBalance = async (address: Address) => {
     const {token, releaseToken} = await this.getTokens()
     const tokenBalance =
@@ -159,6 +188,19 @@ export class RomulusKit {
       tokenBalance,
       releaseTokenBalance,
       totalBalance: tokenBalance.add(releaseTokenBalance),
+    }
+  }
+
+  public tokenSymbol = async () => {
+    const {token, releaseToken} = await this.getTokens()
+    const tokenSymbol =
+      token ? await token.methods.symbol().call() : ""
+    const releaseTokenSymbol =
+      releaseToken ? await releaseToken.methods.symbol().call() : ""
+
+    return {
+      tokenSymbol,
+      releaseTokenSymbol,
     }
   }
 
@@ -194,43 +236,21 @@ export class RomulusKit {
   }
 
   // Fetch latest proposals with pagination
-  // @param pageSize Number of elements to fetch
-  // @param cursor The proposal index to start the page from
-  // @param sort The direction of the page
-  public proposals = async (pageSize: number, cursor: number, sort: Sort): Promise<{proposals: Array<Proposal>, nextCursor?: number}> => {
-    if (pageSize === 0) {
-      return {proposals: []}
-    }
-    const numProposals = Number(await this.contract.methods.proposalCount().call())
-    if (cursor < 0 || cursor >= numProposals) {
-      console.warn("RomulusKit: `from` is out of bounds")
-      return {proposals: []}
-    }
+  // @param voter View the proposals from the POV of this address
+  public proposals = async (voter?: Address): Promise<Proposal[]> => {
+    const proposalEvents = await this.contract.getPastEvents("ProposalCreated", {fromBlock: 0}).then((events) => events.map((event) => event.returnValues as ProposalEvent))
 
-    const proposalIds = []
-    let nextCursor: number | undefined;
-    if (sort === Sort.ASC) {
-      const start = cursor;
-      const end = Math.min(numProposals, start + pageSize)
-      if (end < numProposals - 1) {
-        nextCursor = end + 1
+    const proposals = await Promise.all(proposalEvents.map(async (proposalEvent) => {
+      const proposal = await this.contract.methods.proposals(proposalEvent.id).call()
+      const receipt = voter ? await this.contract.methods.getReceipt(proposalEvent.id, voter).call() : {hasVoted: false, support: "0", votes: "0"}
+      return {
+        ...proposalEvent,
+        ...proposal,
+        ...receipt,
       }
-      for (let i = start; i < end; i++) {
-        proposalIds.push(i)
-      }
-    } else {
-      const start = cursor;
-      const end = Math.max(0, start - pageSize + 1)
-      if (end > 0) {
-        nextCursor = end - 1
-      }
-      for (let i = start; i >= end; i--) {
-        proposalIds.push(i)
-      }
-    }
-    const proposals = await Promise.all(proposalIds.map(id => this.contract.methods.proposals(id).call()))
+    }))
 
-    return {proposals, nextCursor}
+    return proposals
   }
 
   private getTokens = async () => {
