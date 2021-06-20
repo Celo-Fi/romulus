@@ -2,7 +2,8 @@ import {Address, ContractKit} from "@celo/contractkit"
 import {toTransactionObject} from "@celo/connect"
 import {RomulusDelegate, ABI as romulusDelegateAbi} from "../types/web3-v1-contracts/RomulusDelegate"
 import {VotingToken, ABI as votingTokenAbi} from "../types/web3-v1-contracts/VotingToken"
-import {toBN} from "web3-utils"
+import {isAddress, toBN} from "web3-utils"
+import BN from "bn.js"
 
 type ProposalEvent = {
   id: string;
@@ -28,7 +29,9 @@ type ProposalReceipt = {
   support: string
   votes: string
 }
-export type Proposal = ProposalEvent & ProposalStruct & ProposalReceipt
+export type Proposal = ProposalEvent & ProposalStruct & ProposalReceipt & {
+  votingPower: BN
+}
 
 export enum Support {
   AGAINST = 0,
@@ -159,6 +162,13 @@ export class RomulusKit {
   }
 
   public currentDelegate = async (address: Address) => {
+    if (!isAddress(address)) {
+      return {
+        tokenDelegate: ZERO_ADDRESS,
+        releaseTokenDelegate: ZERO_ADDRESS,
+      }
+    }
+
     const {token, releaseToken} = await this.getTokens()
 
     const tokenDelegate =
@@ -178,6 +188,14 @@ export class RomulusKit {
   }
 
   public tokenBalance = async (address: Address) => {
+    if (!isAddress(address)) {
+      return {
+        tokenBalance: toBN(0),
+        releaseTokenBalance: toBN(0),
+        totalBalance: toBN(0)
+      }
+    }
+
     const {token, releaseToken} = await this.getTokens()
     const tokenBalance =
       toBN(token ? await token.methods.balanceOf(address).call() : 0)
@@ -219,10 +237,18 @@ export class RomulusKit {
   }
 
   public proposalVotingPower = async (proposalId: number | string, voter: Address) => {
-    const {token, releaseToken} = await this.getTokens()
     const proposal = await this.contract.methods.proposals(proposalId).call()
     const {startBlock} = proposal
+    const latestBlock = await this.kit.web3.eth.getBlockNumber()
+    if (Number(latestBlock) < Number(startBlock)) {
+      return {
+        tokenVotes: toBN(0),
+        releaseTokenVotes: toBN(0),
+        totalVotes: toBN(0),
+      }
+    }
 
+    const {token, releaseToken} = await this.getTokens()
     const tokenVotes =
       toBN(token ? await token.methods.getPriorVotes(voter, startBlock).call() : 0)
     const releaseTokenVotes =
@@ -243,10 +269,13 @@ export class RomulusKit {
     const proposals = await Promise.all(proposalEvents.map(async (proposalEvent) => {
       const proposal = await this.contract.methods.proposals(proposalEvent.id).call()
       const receipt = voter ? await this.contract.methods.getReceipt(proposalEvent.id, voter).call() : {hasVoted: false, support: "0", votes: "0"}
+      const votingPower = voter ? (await this.proposalVotingPower(proposalEvent.id, voter)).totalVotes : toBN(0)
+
       return {
         ...proposalEvent,
         ...proposal,
         ...receipt,
+        votingPower,
       }
     }))
 
