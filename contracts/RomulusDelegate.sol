@@ -28,6 +28,9 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
   /// @notice The max setable voting delay
   uint256 public constant MAX_VOTING_DELAY = 120960; // About 1 week
 
+  /// @notice The number of votes in support of a proposal required in order for a quorum to be reached and for a vote to succeed
+  uint256 public constant quorumVotes = 4000000e18; // 4,000,000 Tokens
+
   /// @notice The maximum number of actions that can be included in a proposal
   uint256 public constant proposalMaxOperations = 10; // 10 actions
 
@@ -57,8 +60,7 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
     address releaseToken_,
     uint256 votingPeriod_,
     uint256 votingDelay_,
-    uint256 proposalThreshold_,
-    uint256 quorumVotes_
+    uint256 proposalThreshold_
   ) public initializer adminOnly {
     require(TimelockInterface(timelock_).admin() == address(this), "Romulus::initialize: timelock admin is not assigned to RomulusDelegate");
     require(
@@ -77,7 +79,6 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
     votingPeriod = votingPeriod_;
     votingDelay = votingDelay_;
     proposalThreshold = proposalThreshold_;
-    quorumVotes = quorumVotes_;
   }
 
   /**
