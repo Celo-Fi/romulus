@@ -17,16 +17,16 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
   uint256 public constant MAX_PROPOSAL_THRESHOLD = 5000000e18; // 5,000,000 Tokens
 
   /// @notice The minimum setable voting period
-  uint256 public constant MIN_VOTING_PERIOD = 5760; // About 24 hours
+  uint256 public constant MIN_VOTING_PERIOD = 17280; // About 24 hours
 
   /// @notice The max setable voting period
-  uint256 public constant MAX_VOTING_PERIOD = 80640; // About 2 weeks
+  uint256 public constant MAX_VOTING_PERIOD = 241920; // About 2 weeks
 
   /// @notice The min setable voting delay
   uint256 public constant MIN_VOTING_DELAY = 1;
 
   /// @notice The max setable voting delay
-  uint256 public constant MAX_VOTING_DELAY = 40320; // About 1 week
+  uint256 public constant MAX_VOTING_DELAY = 120960; // About 1 week
 
   /// @notice The maximum number of actions that can be included in a proposal
   uint256 public constant proposalMaxOperations = 10; // 10 actions
