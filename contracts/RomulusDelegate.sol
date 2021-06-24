@@ -79,6 +79,37 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
     votingPeriod = votingPeriod_;
     votingDelay = votingDelay_;
     proposalThreshold = proposalThreshold_;
+
+    // Create dummy proposal
+    Proposal memory dummyProposal =
+      Proposal({
+        id: proposalCount,
+        proposer: address(this),
+        eta: 0,
+        startBlock: 0,
+        endBlock: 0,
+        forVotes: 0,
+        againstVotes: 0,
+        abstainVotes: 0,
+        canceled: true,
+        executed: false
+      });
+    proposalCount++;
+
+    proposals[dummyProposal.id] = dummyProposal;
+    latestProposalIds[dummyProposal.proposer] = dummyProposal.id;
+
+    emit ProposalCreated(
+      dummyProposal.id,
+      address(this),
+      proposalTargets[dummyProposal.id],
+      proposalValues[dummyProposal.id],
+      proposalSignatures[dummyProposal.id],
+      proposalCalldatas[dummyProposal.id],
+      0,
+      0,
+      ""
+    );
   }
 
   /**
