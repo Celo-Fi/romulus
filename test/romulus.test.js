@@ -11,7 +11,7 @@ const {toBN, toWei, toHex} = require('web3-utils');
 const Poof = artifacts.require('POOFMock')
 const Timelock = artifacts.require('TimelockMock')
 const RomulusDelegator = artifacts.require('RomulusDelegatorMock')
-const RomulusDelegate = artifacts.require('RomulusDelegate')
+const RomulusDelegate = artifacts.require('RomulusDelegateMock')
 
 async function enfranchise(token, actor, amount) {
   await token.transfer(actor, amount)
@@ -30,7 +30,7 @@ async function getNextAddr(sender, offset = 0) {
 }
 
 contract("RomulusDelegator", (accounts) => {
-  let token, root, a1, otherAccounts, proposer, voter1, voter2, voter3, voter4, govDelegator, unlockedVoter;
+  let token, root, a1, a2, proposer, voter1, voter2, voter3, voter4, govDelegator, unlockedVoter;
   let targets, values, signatures, calldatas;
 
   const createProposal = async () => {
@@ -44,7 +44,7 @@ contract("RomulusDelegator", (accounts) => {
   }
 
   before(async () => {
-    [root, a1, proposer, voter1, voter2, voter3, voter4, ...otherAccounts] = accounts;
+    [root, a1, proposer, voter1, voter2, voter3, voter4, a2] = accounts;
 
     const delegatorExpectedAddr = await getNextAddr(root, 3)
 
@@ -63,6 +63,8 @@ contract("RomulusDelegator", (accounts) => {
     );
     // Inherit ABI of RomulusDelegate, but call through the proxy (i.e. the delegator)
     govDelegator = await RomulusDelegate.at(govDelegator.address)
+    // Set the voting period to 1 block
+    await govDelegator._setVotingPeriod(5)
 
     targets = [a1];
     values = ["0"];
@@ -242,40 +244,39 @@ contract("RomulusDelegator", (accounts) => {
       state.should.be.eq.BN("2")
     })
 
-    it.skip("should show defeated", async () => {
+    it("should show defeated", async () => {
       const proposalId = await createProposal()
-      await advanceBlocks(18000)
+      await advanceBlocks(10)
       const state = await govDelegator.state(proposalId)
       state.should.be.eq.BN("3")
       await cancelProposal(proposalId)
     })
 
-    it.skip("should show succeeded", async () => {
+    it("should show succeeded", async () => {
       const proposalId = await createProposal()
       await mineBlock();
       await mineBlock();
 
       await govDelegator.castVote(proposalId, 1, {from: voter4})
-      await advanceBlocks(18000)
+      await advanceBlocks(10)
       const state = await govDelegator.state(proposalId)
       state.should.be.eq.BN("4")
     })
 
-    it.skip("should show queued", async () => {
+    it("should show queued", async () => {
       const proposalId = await govDelegator.latestProposalIds(proposer)
       await govDelegator.queue(proposalId)
       const state = await govDelegator.state(proposalId)
       state.should.be.eq.BN("5")
     })
 
-    it.skip("should show executed", async () => {
+    it("should show executed", async () => {
       const proposalId = await govDelegator.latestProposalIds(proposer)
       await govDelegator.execute(proposalId)
       const state = await govDelegator.state(proposalId)
       state.should.be.eq.BN("7")
     })
   })
-
 
   describe("#getReceipt", () => {
     it("should work", async () => {
@@ -332,4 +333,48 @@ contract("RomulusDelegator", (accounts) => {
       await cancelProposal(proposalId)
     });
   });
+
+  describe("happy path", () => {
+    it("should set voting delay to 100", async () => {
+      const votingDelayBefore = await govDelegator.votingDelay()
+      votingDelayBefore.should.be.eq.BN("1")
+
+      await govDelegator.propose(
+        [govDelegator.address],
+        [0],
+        ["_setVotingDelay(uint256)"],
+        [encodeParameters(['uint256'], [100])],
+        "Update voting delay to 100",
+        {from: proposer})
+
+      // Create
+      const proposalId = await govDelegator.latestProposalIds(proposer)
+      let state = await govDelegator.state(proposalId)
+      state.should.be.eq.BN("0")
+
+      // Move to active
+      await advanceBlocks(2)
+      state = await govDelegator.state(proposalId)
+      state.should.be.eq.BN("1")
+
+      // Move to succeed
+      await govDelegator.castVote(proposalId, 1, {from: voter4})
+      await advanceBlocks(10)
+      state = await govDelegator.state(proposalId)
+      state.should.be.eq.BN("4")
+
+      // Move to queued
+      await govDelegator.queue(proposalId)
+      state = await govDelegator.state(proposalId)
+      state.should.be.eq.BN("5")
+
+      // Move to executed
+      await govDelegator.execute(proposalId)
+      state = await govDelegator.state(proposalId)
+      state.should.be.eq.BN("7")
+
+      const votingDelayAfter = await govDelegator.votingDelay()
+      votingDelayAfter.should.be.eq.BN("100")
+    })
+  })
 });

@@ -72,8 +72,10 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
       proposalThreshold_ >= MIN_PROPOSAL_THRESHOLD && proposalThreshold_ <= MAX_PROPOSAL_THRESHOLD,
       "Romulus::initialize: invalid proposal threshold"
     );
-
     timelock = TimelockInterface(timelock_);
+    require(timelock.admin() == address(this), "Romulus::initialize: timelock admin is not assigned to RomulusDelegate");
+
+    admin = msg.sender;
     token = IHasVotes(token_);
     releaseToken = IHasVotes(releaseToken_);
     votingPeriod = votingPeriod_;
@@ -186,7 +188,6 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
    * @param proposalId The id of the proposal to queue
    */
   function queue(uint256 proposalId) external {
-    require(address(timelock) != address(0), "RomulusDelegate has not yet been initialized");
     require(state(proposalId) == ProposalState.Succeeded, "Romulus::queue: proposal can only be queued if it is succeeded");
     Proposal storage proposal = proposals[proposalId];
     uint256 eta = add256(block.timestamp, timelock.delay());
@@ -210,7 +211,6 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
     bytes memory data,
     uint256 eta
   ) internal {
-    require(address(timelock) != address(0), "RomulusDelegate has not yet been initialized");
     require(
       !timelock.queuedTransactions(keccak256(abi.encode(target, value, signature, data, eta))),
       "Romulus::queueOrRevertInternal: identical proposal action already queued at eta"
@@ -223,7 +223,6 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
    * @param proposalId The id of the proposal to execute
    */
   function execute(uint256 proposalId) external payable {
-    require(address(timelock) != address(0), "RomulusDelegate has not yet been initialized");
     require(state(proposalId) == ProposalState.Queued, "Romulus::execute: proposal can only be executed if it is queued");
     Proposal storage proposal = proposals[proposalId];
     proposal.executed = true;
@@ -244,7 +243,6 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
    * @param proposalId The id of the proposal to cancel
    */
   function cancel(uint256 proposalId) external {
-    require(address(timelock) != address(0), "RomulusDelegate has not yet been initialized");
     require(state(proposalId) != ProposalState.Executed, "Romulus::cancel: cannot cancel executed proposal");
 
     Proposal storage proposal = proposals[proposalId];
@@ -309,7 +307,6 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
    * @return Proposal state
    */
   function state(uint256 proposalId) public view returns (ProposalState) {
-    require(address(timelock) != address(0), "RomulusDelegate has not yet been initialized");
     require(proposalCount > proposalId, "Romulus::state: invalid proposal id");
     Proposal storage proposal = proposals[proposalId];
     if (proposal.canceled) {
@@ -426,7 +423,7 @@ contract RomulusDelegate is RomulusDelegateStorageV1, RomulusEvents, Initializab
    * @notice Admin function for setting the voting period
    * @param newVotingPeriod new voting period, in blocks
    */
-  function _setVotingPeriod(uint256 newVotingPeriod) external adminOnly {
+  function _setVotingPeriod(uint256 newVotingPeriod) external virtual adminOnly {
     require(
       newVotingPeriod >= MIN_VOTING_PERIOD && newVotingPeriod <= MAX_VOTING_PERIOD,
       "Romulus::_setVotingPeriod: invalid voting period"
