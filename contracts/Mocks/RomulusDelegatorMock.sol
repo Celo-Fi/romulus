@@ -8,10 +8,10 @@ import "../RomulusDelegator.sol";
 contract RomulusDelegatorMock is RomulusDelegator {
   constructor(
     bytes32 timelock_,
-    bytes32 token_,
-    bytes32 releaseToken_,
+    address token_,
+    address releaseToken_,
     bytes32 admin_,
-    bytes32 implementation_,
+    address implementation_,
     uint votingPeriod_,
     uint votingDelay_,
     uint proposalThreshold_

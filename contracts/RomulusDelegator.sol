@@ -8,10 +8,10 @@ import "./RomulusInterfaces.sol";
 contract RomulusDelegator is RomulusDelegatorStorage, RomulusEvents, NomResolve {
   constructor(
     bytes32 timelock_,
-    bytes32 token_,
-    bytes32 releaseToken_,
+    address token_,
+    address releaseToken_,
     bytes32 admin_,
-    bytes32 implementation_,
+    address implementation_,
     uint votingPeriod_,
     uint votingDelay_,
     uint proposalThreshold_
@@ -20,18 +20,18 @@ contract RomulusDelegator is RomulusDelegatorStorage, RomulusEvents, NomResolve 
     admin = msg.sender;
 
     delegateTo(
-      resolve(implementation_), 
+      implementation_, 
       abi.encodeWithSignature(
         "initialize(address,address,address,uint256,uint256,uint256)",
          resolve(timelock_),
-         resolve(token_),
-         resolve(releaseToken_),
+         token_,
+         releaseToken_,
          votingPeriod_,
          votingDelay_,
          proposalThreshold_
       )
     );
-    _setImplementation(resolve(implementation_));
+    _setImplementation(implementation_);
     admin = resolve(admin_);
 	}
 
